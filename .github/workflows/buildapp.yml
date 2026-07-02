@@ -18,7 +18,12 @@ on:
                 default: true
                 required: false
                 type: boolean
-  
+            create_release:
+                description: "Create a draft GitHub release (skipped automatically on forks)"
+                default: true
+                required: false
+                type: boolean
+   
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
@@ -49,7 +54,7 @@ jobs:
                 ref: master
                 path: ${{ github.workspace }}/theos
                 submodules: recursive
-        
+         
             - name: SDK Caching
               id: SDK
               uses: actions/cache@v4
@@ -79,7 +84,7 @@ jobs:
                 wget "$Instagram_URL" --no-verbose -O packages/com.burbn.instagram.ipa
 
                 ls -la packages
-                
+                 
               env:
                 THEOS: ${{ github.workspace }}/theos
                 Instagram_URL: ${{ inputs.decrypted_instagram_url }}
@@ -91,11 +96,11 @@ jobs:
 
                 echo "SCINSTA_VERSION=${SCINSTA_VERSION}" >> "$GITHUB_ENV"
                 echo "version=${SCINSTA_VERSION}" >> "$GITHUB_OUTPUT"
-            
+             
             - name: Build SCInsta tweak for sideloading (as IPA)
               run: |
                 pip install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
-                
+                 
                 cd main
                 curl -Lo ipapatch https://github.com/asdfzxcvbn/ipapatch/releases/download/v2.1.3/ipapatch.macos-arm64
                 chmod +x ipapatch
@@ -104,7 +109,7 @@ jobs:
 
                 ./build.sh sideload
                 ls -la packages
-                
+                 
               env:
                 THEOS: ${{ github.workspace }}/theos
 
@@ -119,7 +124,7 @@ jobs:
                 echo "package=$(ls -t main/packages |  head -n1)" >> "$GITHUB_OUTPUT"
 
             - name: Upload Artifact
-              if: ${{ inputs.upload_artifact }}
+              if: ${{ inputs.upload_artifact || github.event.repository.fork == true }}
               uses: actions/upload-artifact@v4
               with:
                 name: SCInsta_sideloaded_v${{ steps.scinsta_version.outputs.version }}
@@ -127,12 +132,19 @@ jobs:
                 if-no-files-found: error
 
             - name: Create Release
+              if: ${{ inputs.create_release && github.event.repository.fork == false }}
               uses: softprops/action-gh-release@v2.0.6
               with:
                 name: SCInsta_sideloaded_v${{ steps.scinsta_version.outputs.version }}
                 files: ${{ github.workspace }}/main/packages/SCInsta_sideloaded_v*.ipa
                 draft: true
 
+            - name: Release skipped on fork
+              if: ${{ inputs.create_release && github.event.repository.fork == true }}
+              run: |
+                echo "::notice::Skipping draft release creation because this repository is a fork. Download the IPA from this workflow run's artifacts instead."
+
             - name: Output Release URL
+              if: ${{ inputs.create_release && github.event.repository.fork == false }}
               run: |
                 echo "::notice::Release available at: https://github.com/${{ github.repository }}/releases"
