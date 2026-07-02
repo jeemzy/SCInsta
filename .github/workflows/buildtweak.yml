@@ -6,14 +6,14 @@ on:
             - 'main'
             - 'dev'
     workflow_dispatch:
-  
+   
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 jobs:
     build:
         name: Build SCInsta Rootless
-        runs-on: macos-latest
+        runs-on: macos-15
         permissions:
             contents: write
 
@@ -37,7 +37,7 @@ jobs:
                 ref: master
                 path: ${{ github.workspace }}/theos
                 submodules: recursive
-        
+         
             - name: SDK Caching
               id: SDK
               uses: actions/cache@v4
@@ -66,17 +66,27 @@ jobs:
 
                 echo "SCINSTA_VERSION=${SCINSTA_VERSION}" >> "$GITHUB_ENV"
                 echo "version=${SCINSTA_VERSION}" >> "$GITHUB_OUTPUT"
-            
+             
             - name: Build SCInsta tweak for Rootless
-              run: |                
+              shell: bash
+              run: |
+                set -o pipefail
                 cd main
                 ls -la
 
-                ./build.sh rootless
+                ./build.sh rootless 2>&1 | tee ../build-rootless.log
                 ls -la packages
-                
+                 
               env:
                 THEOS: ${{ github.workspace }}/theos
+
+            - name: Upload build log on failure
+              if: ${{ failure() }}
+              uses: actions/upload-artifact@v4
+              with:
+                name: SCInsta-rootless-build-log
+                path: ${{ github.workspace }}/build-rootless.log
+                if-no-files-found: ignore
 
             - name: Rename deb to include version info
               run: |
